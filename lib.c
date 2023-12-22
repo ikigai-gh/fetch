@@ -130,14 +130,16 @@ char *fetch_os()
 
     strtok(os_str, "=");
     char *token = strtok(NULL, "=");
+    char tok_buf[strlen(token) + STR_NULL_CHAR];
+    strcpy(tok_buf, token);
 
     if (!token)
     {
         goto error;
     }
 
-    del_ch(token, '\n', 1);
-    del_ch(token, '\"', 2);
+    del_ch(tok_buf, '\n', 1);
+    del_ch(tok_buf, '\"', 2);
 
     // TODO: Figure out not to call uname() twice
     struct utsname info;
@@ -148,7 +150,7 @@ char *fetch_os()
         goto error;
     }
 
-    size_t os_sz = strlen(token) + strlen(info.machine) + STR_NULL_CHAR;
+    size_t os_sz = strlen(tok_buf) + strlen(info.machine) + STR_NULL_CHAR;
     os = calloc(os_sz, sizeof(char));
 
     if (!os)
@@ -157,7 +159,7 @@ char *fetch_os()
         goto error;
     }
 
-    strcpy(os, strcat(strcat(token, " "), info.machine));
+    strcpy(os, strcat(strcat(tok_buf, " "), info.machine));
 
     free(os_str);
 
