@@ -77,34 +77,26 @@ static char *read_str(const char* path)
     return buf;
 }
 
-static char* del_ch(char *str, char c, size_t count)
+static void del_ch(char *str, char ch, size_t del_count)
 {
-    size_t pos1 = 0, pos2 = 0;
     size_t deleted = 0;
-    char *str2 = calloc(strlen(str), sizeof(char));
+    char *rptr = str, *wptr = str;
 
-    if (!str2)
+    while (*rptr != '\0')
     {
-        perror("calloc");
-        return NULL;
-    }
-
-    while (pos1 != strlen(str))
-    {
-        if (str[pos1] != c || deleted == count)
+        if (*rptr == ch)
         {
-            str2[pos2++] = str[pos1];
+            if (deleted != del_count)
+            {
+                rptr++;
+                deleted++;
+            }
         }
-
-        else
-        {
-            deleted++;
-        }
-
-        pos1++;
+        *wptr = *rptr;
+        rptr++;
+        wptr++;
     }
-
-    return str2;
+    *wptr = '\0';
 }
 
 static char *try_files(const char *files[], size_t n)
@@ -123,6 +115,7 @@ static char *try_files(const char *files[], size_t n)
 
 char *fetch_os()
 {
+    char *os = NULL;
     const char *OS_INFO_FILE = "/etc/os-release";
     const char *OS_INFO_SEARCH_STR = "PRETTY_NAME";
 
@@ -143,19 +136,8 @@ char *fetch_os()
         goto error;
     }
 
-    char *os = calloc(strlen(token) + STR_NULL_CHAR, sizeof(char));
-
-    if (!os)
-    {
-        perror("calloc");
-        goto error;
-    }
-
-    strcpy(os, token);
-
-    // FIXME: Memory leak
-    os = del_ch(os, '\n', 1);
-    os = del_ch(os, '\"', 2);
+    del_ch(token, '\n', 1);
+    del_ch(token, '\"', 2);
 
     // TODO: Figure out not to call uname() twice
     struct utsname info;
@@ -166,15 +148,16 @@ char *fetch_os()
         goto error;
     }
 
-    os = realloc(os, strlen(os) + strlen(info.machine));
+    size_t os_sz = strlen(token) + strlen(info.machine) + STR_NULL_CHAR;
+    os = calloc(os_sz, sizeof(char));
 
     if (!os)
     {
-        perror("realloc");
+        perror("calloc");
         goto error;
     }
 
-    strcat(strcat(os, " "), info.machine);
+    strcpy(os, strcat(strcat(token, " "), info.machine));
 
     free(os_str);
 
@@ -199,15 +182,7 @@ char *fetch_host()
 
     if (product != NULL)
     {
-        // FIXME: Memory leak
-        product = del_ch(product, '\n', 1);
-
-        host = calloc(strlen(product) + STR_NULL_CHAR, sizeof(char));
-
-        if (host)
-        {
-            strcpy(host, product);
-        }
+        del_ch(product, '\n', 1);
     }
 
     else
@@ -222,15 +197,13 @@ char *fetch_host()
 
     if (version != NULL)
     {
-        // FIXME: Memory leak
-        version = del_ch(version, '\n', 1);
-        host = realloc(host, strlen(product) + strlen(version) + STR_NULL_CHAR);
-
-        if (host)
-        {
-            strcat(strcat(host, " "), version);
-        }
+        del_ch(version, '\n', 1);
     }
+
+    size_t host_sz = strlen(product) + strlen(version) + STR_NULL_CHAR;
+
+    host = calloc(host_sz, sizeof(char));
+    strcpy(host, strcat(strcat(product, " "), version));
 
     free(product);
     free(version);
@@ -349,9 +322,8 @@ char *fetch_cpu()
 
     if (cpu)
     {
-        // FIXME: Memory leak
-        cpu = del_ch(cpu, '\n', 1);
-        cpu = del_ch(cpu, ' ', 1);
+        del_ch(cpu, ' ', 1);
+        del_ch(cpu, '\n', 1);
     }
 
     free(cpu_str);
