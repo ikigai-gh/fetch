@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <sys/utsname.h>
+#include <assert.h>
 #ifdef X11
 #include <X11/Xlib.h>
 #endif
@@ -12,10 +13,15 @@
 // TODO: Figure out better buffer size
 #define SIZE 64
 #define STR_NULL_CHAR 1
+#define ARR_SIZE(arr) (sizeof(arr)/sizeof(arr[0]))
 
 // Low-level functions for reading files
 static char *find_str(const char *path, const char *str);
 static char *read_str(const char *path);
+
+// My secure implementation of string functions from libc
+static inline char *f_strcpy(char *dst, const char *src, size_t len);
+static inline char *f_strcat(char *dst, const char *src, size_t len);
 
 static char *find_str(const char* path, const char* str)
 {
@@ -39,7 +45,7 @@ static char *find_str(const char* path, const char* str)
                 perror("malloc");
                 return NULL;
             }
-            strcpy(str_ptr, buf);
+            f_strcpy(str_ptr, buf, ARR_SIZE(buf));
             return str_ptr;
         }
     }
@@ -113,6 +119,20 @@ static char *try_files(const char *files[], size_t n)
     return content;
 }
 
+static inline char *f_strcpy(char *dst, const char *src, size_t len)
+{
+    assert(strlen(src) + STR_NULL_CHAR <= len);
+    strcpy(dst, src);
+    return dst;
+}
+
+static inline char *f_strcat(char *dst, const char *src, size_t len)
+{
+    assert(strlen(src) + STR_NULL_CHAR <= len);
+    strcat(dst, src);
+    return dst;
+}
+
 char *fetch_os()
 {
     char *os = NULL;
@@ -123,15 +143,16 @@ char *fetch_os()
 
     if (!os_str)
     {
-        char *os = calloc(strlen("Unknown") + STR_NULL_CHAR, sizeof(char));
-        strcpy(os, "Unknown");
+        size_t sz = strlen("Unknown") + STR_NULL_CHAR;
+        char *os = calloc(sz, sizeof(char));
+        f_strcpy(os, "Unknown", sz);
         return os;
     }
 
     strtok(os_str, "=");
     char *token = strtok(NULL, "=");
-    char tok_buf[strlen(token) + STR_NULL_CHAR];
-    strcpy(tok_buf, token);
+    char tok_buf[SIZE];
+    f_strcpy(tok_buf, token, ARR_SIZE(tok_buf));
 
     if (!token)
     {
@@ -150,6 +171,7 @@ char *fetch_os()
         goto error;
     }
 
+    f_strcat(tok_buf, " ", ARR_SIZE(tok_buf));
     size_t os_sz = strlen(tok_buf) + strlen(info.machine) + STR_NULL_CHAR;
     os = calloc(os_sz, sizeof(char));
 
@@ -159,7 +181,7 @@ char *fetch_os()
         goto error;
     }
 
-    strcpy(os, strcat(strcat(tok_buf, " "), info.machine));
+    f_strcpy(os, f_strcat(tok_buf, info.machine, ARR_SIZE(tok_buf)), os_sz);
 
     free(os_str);
 
@@ -173,6 +195,7 @@ error:
 char *fetch_host()
 {
     char *host = NULL;
+    size_t h_sz = 0;
 
     const char *PRODUCT_INFO_FILES[] =
     {
@@ -189,8 +212,9 @@ char *fetch_host()
 
     else
     {
-        char *host = calloc(strlen("Unknown") + STR_NULL_CHAR, sizeof(char));
-        strcpy(host, "Unknown");
+        h_sz = strlen("Unknown") + STR_NULL_CHAR;
+        char *host = calloc(h_sz, sizeof(char));
+        f_strcpy(host, "Unknown", h_sz);
         return host;
     }
 
@@ -202,10 +226,11 @@ char *fetch_host()
         del_ch(version, '\n', 1);
     }
 
+    f_strcat(product, " ", SIZE);
     size_t host_sz = strlen(product) + strlen(version) + STR_NULL_CHAR;
 
     host = calloc(host_sz, sizeof(char));
-    strcpy(host, strcat(strcat(product, " "), version));
+    f_strcpy(host, f_strcat(product, version, host_sz), host_sz);
 
     free(product);
     free(version);
@@ -223,7 +248,8 @@ char *fetch_kern()
         return NULL;
     }
 
-    char *kern = calloc(strlen(info.release) + STR_NULL_CHAR, sizeof(char));
+    const size_t kern_sz = strlen(info.release) + STR_NULL_CHAR;
+    char *kern = calloc(kern_sz, sizeof(char));
 
     if (!kern)
     {
@@ -231,7 +257,7 @@ char *fetch_kern()
         return NULL;
     }
 
-    strcpy(kern, info.release);
+    f_strcpy(kern, info.release, kern_sz);
 
     return kern;
 }
@@ -262,8 +288,9 @@ char *fetch_uptime()
     // FIXME: Hardcoded size
     char uptime_fmt[SIZE];
     snprintf(uptime_fmt, SIZE, "%zuy %zud %zuh %zum", years, days, hours, minutes);
+    const size_t up_sz = SIZE + STR_NULL_CHAR;
 
-    char *uptime = calloc(SIZE + STR_NULL_CHAR, sizeof(char));
+    char *uptime = calloc(up_sz, sizeof(char));
 
     if (!uptime)
     {
@@ -272,7 +299,7 @@ char *fetch_uptime()
         return NULL;
     }
 
-    strcpy(uptime, uptime_fmt);
+    f_strcpy(uptime, uptime_fmt, up_sz);
     free(uptime_str);
 
     return uptime;
@@ -283,6 +310,7 @@ char *fetch_cpu()
     const char *CPU_INFO_FILE = "/proc/cpuinfo";
     const char *CPU_INFO_STRS[] = {"model name", "Processor"};
     char *cpu_str = NULL;
+    size_t cpu_sz = 0;
 
     for (size_t i = 0; i < sizeof(CPU_INFO_STRS) / sizeof(CPU_INFO_STRS[0]); i++)
     {
@@ -296,8 +324,9 @@ char *fetch_cpu()
 
     if (!cpu_str)
     {
-        char *cpu = calloc(strlen("Unknown") + STR_NULL_CHAR, sizeof(char));
-        strcpy(cpu, "Unknown");
+        cpu_sz = strlen("Unknown") + STR_NULL_CHAR;
+        char *cpu = calloc(cpu_sz, sizeof(char));
+        f_strcpy(cpu, "Unknown", cpu_sz);
         return cpu;
     }
 
@@ -311,7 +340,8 @@ char *fetch_cpu()
         return NULL;
     }
 
-    char *cpu = calloc(strlen(token) + STR_NULL_CHAR, sizeof(char));
+    cpu_sz = strlen(token) + STR_NULL_CHAR;
+    char *cpu = calloc(cpu_sz, sizeof(char));
 
     if (!cpu)
     {
@@ -320,7 +350,7 @@ char *fetch_cpu()
         return NULL;
     }
 
-    strcpy(cpu, token);
+    f_strcpy(cpu, token, cpu_sz);
 
     if (cpu)
     {
@@ -338,6 +368,7 @@ char *fetch_shell()
     const char *shells[] = {"sh", "bash", "zsh", "csh", "tsch", "ksh", "ash", "fish"};
 
     char *shell_str = getenv("SHELL");
+    size_t sh_sz = 0;
 
     if (!shell_str)
     {
@@ -364,12 +395,14 @@ char *fetch_shell()
 
     if (!shell_recognized)
     {
-        char *unknown_shell = calloc(strlen("Unknown") + STR_NULL_CHAR, sizeof(char));
-        strcpy(unknown_shell, "Unknown");
+        sh_sz = strlen("Unknown") + STR_NULL_CHAR;
+        char *unknown_shell = calloc(sh_sz, sizeof(char));
+        f_strcpy(unknown_shell, "Unknown", sh_sz);
         return unknown_shell;
     }
 
-    char *shell = calloc(strlen(shell_token) + STR_NULL_CHAR, sizeof(char));
+    sh_sz = strlen(shell_token) + STR_NULL_CHAR;
+    char *shell = calloc(sh_sz, sizeof(char));
 
     if (!shell)
     {
@@ -377,7 +410,7 @@ char *fetch_shell()
         return NULL;
     }
 
-    strcpy(shell, shell_token);
+    f_strcpy(shell, shell_token, sh_sz);
 
     return shell;
 }
@@ -407,7 +440,7 @@ char *fetch_res()
         return NULL;
     }
 
-    strcpy(res, res_fmt);
+    f_strcpy(res, res_fmt);
 
     return res;
 }
