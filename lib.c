@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <sys/utsname.h>
 #include <assert.h>
+#include <errno.h>
 #ifdef X11
 #include <X11/Xlib.h>
 #endif
@@ -29,6 +30,7 @@ static char *find_str(const char* path, const char* str)
 
     if (!fd)
     {
+        fprintf(stderr, "fopen() error %s: %s\n", path, strerror(errno));
         return NULL;
     }
 
@@ -42,7 +44,7 @@ static char *find_str(const char* path, const char* str)
             str_ptr = calloc(strlen(buf) + STR_NULL_CHAR, sizeof(char));
             if (!str_ptr)
             {
-                perror("malloc");
+                perror("calloc");
                 return NULL;
             }
             f_strcpy(str_ptr, buf, ARR_SIZE(buf));
@@ -59,6 +61,7 @@ static char *read_str(const char* path)
 
     if (!fd)
     {
+        fprintf(stderr, "fopen() error %s: %s\n", path, strerror(errno));
         return NULL;
     }
 
